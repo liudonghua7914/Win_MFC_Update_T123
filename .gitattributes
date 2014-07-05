@@ -1,0 +1,8 @@
+*.sln binary
+*.aps binary
+*.rc binary
+*.sdf binary
+*.suo binary
+*.vcxproj binary
+*.filters binary
+*.user binary
