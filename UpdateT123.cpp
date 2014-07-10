@@ -131,6 +131,10 @@ BOOL CUpdateT123Dlg::ReadConfigFile(void)
 		pBuf[FileLength] = '\0';
 		m_FlyConfigFile.Read(pBuf,FileLength);
 	}
+	else
+	{
+		return FALSE;
+	}
 
 	/*
 	 *	解析配置文件
@@ -192,6 +196,52 @@ BOOL CUpdateT123Dlg::ReadConfigFile(void)
 					}	
 				}
 
+				if(bRunFunc)
+				{
+					bRunFunc = FALSE;
+
+					if (bNode)
+					{
+						if(!memcmp("COM",ID,sizeof("COM")))
+						{
+							m_FlyConfigNode = Node_COM;
+						}
+					}
+					else
+					{
+						if (Node_COM == m_FlyConfigNode)
+						{
+							if (!memcmp(("ComName"),ID,sizeof("ComName")))
+							{
+								m_ComName = Value;
+							}
+							else if (!memcmp(("BaudRate"),ID,sizeof("BaudRate")))
+							{
+								m_BaudRate = atoi(Value);
+							}
+							else if (!memcmp(("Parity"),ID,sizeof("Parity")))
+							{
+								if (!memcmp(("NOPARITY"),Value,sizeof("NOPARITY")))
+								{
+									m_Parity = NOPARITY;
+								}
+							}
+							else if (!memcmp(("StopBits"),ID,sizeof("StopBits")))
+							{
+								if (!memcmp(("ONESTOPBIT"),Value,sizeof("ONESTOPBIT")))
+								{
+									m_StopBits = ONESTOPBIT;
+								}
+							}
+							else if (!memcmp(("ByteSize"),ID,sizeof("ByteSize")))
+							{
+								m_ByteSize = atoi(Value);
+							}
+						}
+					}	
+				}
+
+
 				bNeedProc = FALSE;
 				bNode = FALSE;
 				IDlength = 0;
@@ -200,50 +250,7 @@ BOOL CUpdateT123Dlg::ReadConfigFile(void)
 		}
 	}
 
-	if(bRunFunc)
-	{
-		bRunFunc = FALSE;
-
-		if (bNode)
-		{
-			if(!memcmp("COM",ID,sizeof("COM")))
-			{
-				m_FlyConfigNode = Node_COM;
-			}
-		}
-		else
-		{
-			if (Node_COM == m_FlyConfigNode)
-			{
-				if (!memcmp(("ComName"),ID,sizeof("ComName")))
-				{
-					m_ComName = Value;
-				}
-				else if (!memcmp(("BaudRate"),ID,sizeof("BaudRate")))
-				{
-					m_BaudRate = atoi(Value);
-				}
-				else if (!memcmp(("Parity"),ID,sizeof("Parity")))
-				{
-					if (!memcmp(("NOPARITY"),Value,sizeof("NOPARITY")))
-					{
-						m_Parity = NOPARITY;
-					}
-				}
-				else if (!memcmp(("StopBits"),ID,sizeof("StopBits")))
-				{
-					if (!memcmp(("ONESTOPBIT"),Value,sizeof("ONESTOPBIT")))
-					{
-						m_StopBits = ONESTOPBIT;
-					}
-				}
-				else if (!memcmp(("ByteSize"),ID,sizeof("ByteSize")))
-				{
-					m_ByteSize = atoi(Value);
-				}
-			}
-		}	
-	}
+	
 
 	delete pBuf;
 
@@ -305,7 +312,7 @@ BOOL CUpdateT123Dlg::InitCommTimeouts(void)
 	return TRUE;
 }
 /*********************************************************************************************************************************************
-**函数名称:		ThreadCommProc
+**函数名称:		ReadUartCom
 **函数功能:
 **入口参数:
 **返回参数:
@@ -313,10 +320,49 @@ BOOL CUpdateT123Dlg::InitCommTimeouts(void)
 void CUpdateT123Dlg::ReadUartCom(BYTE *p,UINT32 Len)
 {
 	UINT32 i;
-	for (i = 0;i < Len;i++)
+	if(Len)
 	{
-		
+		for (i = 0;i < Len;i++)
+		{
+			OnRecData(p[i]);
+		}
 	}
+}
+/*********************************************************************************************************************************************
+**函数名称:		WriteUartCom
+**函数功能:
+**入口参数:
+**返回参数:
+**********************************************************************************************************************************************/
+void CUpdateT123Dlg::WriteUartCom(BYTE *p,UINT32 Len)
+{
+	DWORD dwLength;
+	BOOL fWriteStatus;
+	DWORD dwRes;
+	memset(&m_ovWrite,0,sizeof(m_ovWrite));
+	m_ovWrite.hEvent = CreateEvent(NULL,TRUE,FALSE,NULL);
+	fWriteStatus = WriteFile(m_hComm,p,Len,&dwLength,&m_ovWrite);
+	if (!fWriteStatus)
+	{
+		if(ERROR_IO_PENDING == GetLastError())
+		{
+			dwRes = WaitForSingleObject(m_ovWrite.hEvent,INFINITE);
+			switch(dwRes)
+			{
+				case WAIT_OBJECT_0:		if(GetOverlappedResult(m_hComm,&m_ovWrite,&dwLength,FALSE))
+										{
+
+										}
+										break;
+
+				case WAIT_TIMEOUT:		
+					break;
+
+				default:				
+					break; 
+			}	
+		}
+	}	
 }
 /*********************************************************************************************************************************************
 **函数名称:		ThreadCommProc
@@ -377,25 +423,35 @@ DWORD WINAPI CUpdateT123Dlg::ThreadCommProc(LPCVOID pContext)
 **入口参数:
 **返回参数:
 **********************************************************************************************************************************************/
-void CUpdateT123Dlg::OpenUartCom(void)
+BOOL CUpdateT123Dlg::OpenUartCom(void)
 {
 	DWORD dwThreadID;
 /*
  *	串口初始化
 */
 	CString msg;
+#if 1
 	if (!ReadConfigFile())
 	{
 		msg = "Open ReadConfigFile Fail";
 		MessageBox(msg);
+		return FALSE;
 	}
-
+#else
+	m_ComName = "COM5:";
+	m_BaudRate = 115200;
+	m_Parity = NOPARITY;
+	m_StopBits = ONESTOPBIT;
+	m_ByteSize = 8;
+#endif
+	
 	m_hComm = CreateFile(m_ComName,GENERIC_READ | GENERIC_WRITE,0,NULL,OPEN_EXISTING,FILE_FLAG_OVERLAPPED,NULL);
 	if(INVALID_HANDLE_VALUE == m_hComm)
 	{
 		msg = "Open Fail ";
 		msg += m_ComName;
 		MessageBox(msg);
+		return FALSE;
 	}
 
 	SetCommMask(m_hComm,EV_RXCHAR);
@@ -406,11 +462,13 @@ void CUpdateT123Dlg::OpenUartCom(void)
 	{
 		msg = "InitDCB Fail ";	
 		MessageBox(msg);
+		return FALSE;
 	}
 	if (!InitCommTimeouts())
 	{
 		msg = "InitCommTimeouts Fail ";	
 		MessageBox(msg);	
+		return FALSE;
 	}
 
 	EscapeCommFunction(m_hComm,SETDTR);
@@ -427,7 +485,37 @@ void CUpdateT123Dlg::OpenUartCom(void)
 	{
 		msg = "CreateThread ThreadCommProc Fail ";	
 		MessageBox(msg);	
+		return FALSE;
+	}
+	return TRUE;
+}
+/*********************************************************************************************************************************************
+**函数名称:		CloseUartCom
+**函数功能:
+**入口参数:
+**返回参数:
+**********************************************************************************************************************************************/
+void CUpdateT123Dlg::CloseUartCom(void)
+{
+	m_bKillCommThread = TRUE;
+
+	if (INVALID_HANDLE_VALUE != m_hComm)
+	{
+		CloseHandle(m_hComm);
 	}
 
-}
+	if (NULL != m_hCommThread)
+	{
+		CloseHandle(m_hCommThread);
+	}
 
+	if (NULL != m_ovRead.hEvent)
+	{
+		ResetEvent(m_ovRead.hEvent);
+	}
+
+	if (NULL != m_ovWrite.hEvent)
+	{
+		ResetEvent(m_ovWrite.hEvent);
+	}
+}
