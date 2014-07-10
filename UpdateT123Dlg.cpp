@@ -675,7 +675,7 @@ DWORD WINAPI CUpdateT123Dlg::ThreadMainUpdateFileProc(LPCVOID pContext)
 								{
 									pCUpdateT123Dlg->m_UpdateFileStatus = Update_Free;
 									CstrStatus = "Finish";
-									pCUpdateT123Dlg->MessageBox(__T("升级完成"));//升级完成
+									pCUpdateT123Dlg->MessageBox(__T("升级完成"));//升级完成dwgrsrggrer
 								}
 								break;
 

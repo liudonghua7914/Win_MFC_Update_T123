@@ -2,7 +2,6 @@
 *.aps binary
 *.rc binary
 *.suo binary
-*.sdf binary
 *.vcxproj binary
 *.filters binary
 *.user binary
